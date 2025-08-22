@@ -9,6 +9,7 @@ import RequestHistoryTab from "../components/admin/RequestHistoryTab";
 import RequestSettingsTab from "../components/admin/RequestSettingsTab";
 import ManagersTab from "../components/admin/ManagersTab";
 import CheckPostsTab from "../components/admin/CheckPostsTab";
+import BusOwnersTab from "../components/admin/BusOwnersTab";
 
 const RequestDashboard = () => {
   const { user, token } = useContext(AuthContext);
@@ -26,16 +27,25 @@ const RequestDashboard = () => {
   // Admin states
   const [managers, setManagers] = useState([]);
   const [checkPostMen, setCheckPostMen] = useState([]);
+  const [busOwners, setBusOwners] = useState([]);
 
   // Form states
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [checkPostLocation, setCheckPostLocation] = useState("");
+  const [busOwnerName, setBusOwnerName] = useState("");
+  const [busOwnerPhone, setBusOwnerPhone] = useState("");
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [totalRequests, setTotalRequests] = useState(0);
   const pageSize = 10;
+
+  const [busOwnersPagination, setBusOwnersPagination] = useState({
+    total: 0,
+    pages: 0,
+    currentPage: 1,
+  });
 
   // Socket connection
   const [socket, setSocket] = useState(null);
@@ -53,6 +63,7 @@ const RequestDashboard = () => {
       fetchRequestHistory();
       fetchRequestTypes();
       fetchAdminData();
+      fetchBusOwners();
 
       // Clean up on unmount
       return () => newSocket.close();
@@ -143,6 +154,25 @@ const RequestDashboard = () => {
     }
   };
 
+  const fetchBusOwners = async (page = 1) => {
+    try {
+      setLoading(true);
+      const response = await api.get(
+        `/busowners?page=${page}&limit=${pageSize}`
+      );
+      setBusOwners(response.data.owners);
+      setBusOwnersPagination({
+        total: response.data.total,
+        pages: response.data.pages,
+        currentPage: response.data.currentPage,
+      });
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to fetch bus owners");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleApproveRequest = async (requestId) => {
     try {
       setError("");
@@ -224,6 +254,26 @@ const RequestDashboard = () => {
     }
   };
 
+  const handleCreateBusOwner = async () => {
+    try {
+      setError("");
+      await api.post("/busowners", {
+        name: busOwnerName,
+        phoneNumber: busOwnerPhone,
+      });
+
+      setSuccess("Bus owner created successfully");
+      setTimeout(() => setSuccess(""), 3000);
+
+      // Refresh data and reset form
+      fetchBusOwners();
+      setBusOwnerName("");
+      setBusOwnerPhone("");
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to create bus owner");
+    }
+  };
+
   const handleDeleteUser = async (id, type) => {
     try {
       if (window.confirm("Are you sure you want to delete this user?")) {
@@ -231,6 +281,19 @@ const RequestDashboard = () => {
         setSuccess("User deleted successfully");
         setTimeout(() => setSuccess(""), 3000);
         fetchAdminData(); // Refresh data
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || "Deletion failed");
+    }
+  };
+
+  const handleDeleteBusOwner = async (id) => {
+    try {
+      if (window.confirm("Are you sure you want to delete this bus owner?")) {
+        await api.delete(`/busowners/${id}`);
+        setSuccess("Bus owner deleted successfully");
+        setTimeout(() => setSuccess(""), 3000);
+        fetchBusOwners(); // Refresh data
       }
     } catch (err) {
       setError(err.response?.data?.message || "Deletion failed");
@@ -447,6 +510,37 @@ const RequestDashboard = () => {
               </svg>
             </div>
             <span className="font-medium">CheckPosts</span>
+          </button>
+
+          <button
+            className={`w-full text-left py-4 px-4 rounded-xl transition-all duration-300 flex items-center group ${
+              activeTab === "busowners"
+                ? "bg-indigo-100 text-indigo-700 shadow-sm"
+                : "text-gray-600 hover:bg-indigo-50 hover:text-indigo-600"
+            }`}
+            onClick={() => handleTabChange("busowners")}
+          >
+            <div
+              className={`p-2 rounded-lg mr-3 transition-colors duration-300 ${
+                activeTab === "busowners"
+                  ? "bg-indigo-200 text-indigo-700"
+                  : "bg-gray-100 text-gray-500 group-hover:bg-indigo-100 group-hover:text-indigo-600"
+              }`}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div>
+            <span className="font-medium">Bus Owners</span>
           </button>
         </nav>
 
@@ -672,6 +766,31 @@ const RequestDashboard = () => {
                 CheckPosts
               </div>
             </button>
+
+            <button
+              className={`flex-1 py-4 px-6 text-center font-medium transition-all duration-300 ${
+                activeTab === "busowners"
+                  ? "text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50"
+                  : "text-gray-500 hover:text-indigo-500 hover:bg-gray-50"
+              }`}
+              onClick={() => setActiveTab("busowners")}
+            >
+              <div className="flex items-center justify-center">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5 mr-2"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                Bus Owners
+              </div>
+            </button>
           </div>
         </div>
 
@@ -733,6 +852,20 @@ const RequestDashboard = () => {
                 onLocationChange={setCheckPostLocation}
                 onCreateUser={() => handleCreateUser("checkposts")}
                 onDeleteUser={(id) => handleDeleteUser(id, "checkpost")}
+              />
+            )}
+
+            {activeTab === "busowners" && (
+              <BusOwnersTab
+                busOwners={busOwners}
+                name={busOwnerName}
+                phoneNumber={busOwnerPhone}
+                onNameChange={setBusOwnerName}
+                onPhoneNumberChange={setBusOwnerPhone}
+                onCreateBusOwner={handleCreateBusOwner}
+                onDeleteBusOwner={handleDeleteBusOwner}
+                loading={loading}
+                paginationInfo={busOwnersPagination}
               />
             )}
           </div>
