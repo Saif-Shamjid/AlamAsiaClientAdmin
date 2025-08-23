@@ -24,20 +24,23 @@ import {
   FaEdit,
   FaSave,
   FaCamera,
+  FaCheckCircle,
+  FaExclamationCircle,
 } from "react-icons/fa";
 import FileUploadModal from "../shared/FileUploadModal";
 import PdfPreviewModal from "../shared/PdfPreviewModal";
 import ImageUploadModal from "../shared/ImageUploadModal";
+import ConfirmationModal from "../shared/ConfirmationModal";
 import api from "../../services/api";
+import Snackbar from "../shared/Snackbar";
 
 // Main Bus Owner Profile Component
 const BusOwnerProfile = ({ owner, onClose, fetchOwnerData }) => {
   const [newNote, setNewNote] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [notesScrollPosition, setNotesScrollPosition] = useState(0);
   const [documentsScrollPosition, setDocumentsScrollPosition] = useState(0);
+  const [busesScrollPosition, setBusesScrollPosition] = useState(0);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [previewDocument, setPreviewDocument] = useState(null);
   const [showPdfPreview, setShowPdfPreview] = useState(false);
@@ -47,6 +50,18 @@ const BusOwnerProfile = ({ owner, onClose, fetchOwnerData }) => {
     name: "",
     phoneNumber: "",
   });
+
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    type: "success",
+  });
+
+  // Confirmation modal states
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [confirmData, setConfirmData] = useState(null);
+  const [confirmMessage, setConfirmMessage] = useState("");
 
   // Initialize editedOwner when owner changes
   useEffect(() => {
@@ -58,21 +73,34 @@ const BusOwnerProfile = ({ owner, onClose, fetchOwnerData }) => {
     }
   }, [owner]);
 
+  // Show snackbar function
+  const showSnackbar = (message, type = "success") => {
+    setSnackbar({ open: true, message, type });
+  };
+
+  // Close snackbar function
+  const closeSnackbar = () => {
+    setSnackbar({ open: false, message: "", type: "success" });
+  };
+
   const handleAddNote = async () => {
     if (!newNote.trim()) return;
 
     try {
       setLoading(true);
-      setError("");
       await api.post(`/busowners/${owner._id}/notes`, {
         content: newNote.trim(),
       });
 
       setNewNote("");
+      showSnackbar("Note added successfully", "success");
       // Refresh owner data to show the new note
       if (fetchOwnerData) fetchOwnerData(owner._id);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to add note");
+      showSnackbar(
+        err.response?.data?.message || "Failed to add note",
+        "error"
+      );
     } finally {
       setLoading(false);
     }
@@ -81,8 +109,6 @@ const BusOwnerProfile = ({ owner, onClose, fetchOwnerData }) => {
   const handleUploadDocument = async (formData, ownerId) => {
     try {
       setLoading(true);
-      setError("");
-
       await api.post(`/busowners/${ownerId}/documents`, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
@@ -92,8 +118,12 @@ const BusOwnerProfile = ({ owner, onClose, fetchOwnerData }) => {
       // Refresh owner data to show the new document
       if (fetchOwnerData) fetchOwnerData(ownerId);
       setShowUploadModal(false);
+      showSnackbar("Document uploaded successfully", "success");
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to upload document");
+      showSnackbar(
+        err.response?.data?.message || "Failed to upload document",
+        "error"
+      );
       throw err;
     } finally {
       setLoading(false);
@@ -101,35 +131,36 @@ const BusOwnerProfile = ({ owner, onClose, fetchOwnerData }) => {
   };
 
   const handleDeleteDocument = async (docId) => {
-    if (!window.confirm("Are you sure you want to delete this document?"))
-      return;
-
     try {
       setLoading(true);
-      setError("");
       await api.delete(`/busowners/${owner._id}/documents/${docId}`);
 
       // Refresh owner data to reflect the deletion
       if (fetchOwnerData) fetchOwnerData(owner._id);
+      showSnackbar("Document deleted successfully", "success");
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to delete document");
+      showSnackbar(
+        err.response?.data?.message || "Failed to delete document",
+        "error"
+      );
     } finally {
       setLoading(false);
     }
   };
 
   const handleDeleteNote = async (noteId) => {
-    if (!window.confirm("Are you sure you want to delete this note?")) return;
-
     try {
       setLoading(true);
-      setError("");
       await api.delete(`/busowners/${owner._id}/notes/${noteId}`);
 
       // Refresh owner data to reflect the deletion
       if (fetchOwnerData) fetchOwnerData(owner._id);
+      showSnackbar("Note deleted successfully", "success");
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to delete note");
+      showSnackbar(
+        err.response?.data?.message || "Failed to delete note",
+        "error"
+      );
     } finally {
       setLoading(false);
     }
@@ -138,22 +169,20 @@ const BusOwnerProfile = ({ owner, onClose, fetchOwnerData }) => {
   const handleUpdateOwner = async () => {
     try {
       setLoading(true);
-      setError("");
-      setSuccess("");
-
       await api.put(`/busowners/${owner._id}`, {
         name: editedOwner.name,
         phoneNumber: editedOwner.phoneNumber,
       });
 
-      setSuccess("Owner information updated successfully");
+      showSnackbar("Owner information updated successfully", "success");
       setIsEditing(false);
 
       // Refresh owner data
       if (fetchOwnerData) fetchOwnerData(owner._id);
     } catch (err) {
-      setError(
-        err.response?.data?.message || "Failed to update owner information"
+      showSnackbar(
+        err.response?.data?.message || "Failed to update owner information",
+        "error"
       );
     } finally {
       setLoading(false);
@@ -163,9 +192,6 @@ const BusOwnerProfile = ({ owner, onClose, fetchOwnerData }) => {
   const handleUploadProfilePicture = async (formData, ownerId) => {
     try {
       setLoading(true);
-      setError("");
-      setSuccess("");
-
       await api.post(`/busowners/${ownerId}/profile-pic`, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
@@ -175,12 +201,31 @@ const BusOwnerProfile = ({ owner, onClose, fetchOwnerData }) => {
       // Refresh owner data to show the new profile picture
       if (fetchOwnerData) fetchOwnerData(ownerId);
       setShowImageUploadModal(false);
-      setSuccess("Profile picture updated successfully");
+      showSnackbar("Profile picture updated successfully", "success");
     } catch (err) {
-      setError(
-        err.response?.data?.message || "Failed to upload profile picture"
+      showSnackbar(
+        err.response?.data?.message || "Failed to upload profile picture",
+        "error"
       );
       throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteProfilePicture = async () => {
+    try {
+      setLoading(true);
+      await api.delete(`/busowners/${owner._id}/profile-pic`);
+
+      // Refresh owner data
+      if (fetchOwnerData) fetchOwnerData(owner._id);
+      showSnackbar("Profile picture deleted successfully", "success");
+    } catch (err) {
+      showSnackbar(
+        err.response?.data?.message || "Failed to delete profile picture",
+        "error"
+      );
     } finally {
       setLoading(false);
     }
@@ -212,9 +257,59 @@ const BusOwnerProfile = ({ owner, onClose, fetchOwnerData }) => {
     }
   };
 
+  const scrollBuses = (direction) => {
+    const container = document.getElementById("buses-container");
+    const scrollAmount = 300;
+
+    if (direction === "left") {
+      container.scrollLeft -= scrollAmount;
+      setBusesScrollPosition(container.scrollLeft - scrollAmount);
+    } else {
+      container.scrollLeft += scrollAmount;
+      setBusesScrollPosition(container.scrollLeft + scrollAmount);
+    }
+  };
+
   const handlePreviewDocument = (doc) => {
     setPreviewDocument(doc);
     setShowPdfPreview(true);
+  };
+
+  // Confirmation modal handlers
+  const showDeleteDocumentConfirmation = (docId) => {
+    setConfirmAction(() => handleDeleteDocument);
+    setConfirmData(docId);
+    setConfirmMessage("Are you sure you want to delete this document?");
+    setShowConfirmModal(true);
+  };
+
+  const showDeleteNoteConfirmation = (noteId) => {
+    setConfirmAction(() => handleDeleteNote);
+    setConfirmData(noteId);
+    setConfirmMessage("Are you sure you want to delete this note?");
+    setShowConfirmModal(true);
+  };
+
+  const showDeleteProfilePictureConfirmation = () => {
+    setConfirmAction(() => handleDeleteProfilePicture);
+    setConfirmData(null);
+    setConfirmMessage("Are you sure you want to delete your profile picture?");
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirm = () => {
+    if (confirmAction) {
+      if (confirmData) {
+        confirmAction(confirmData);
+      } else {
+        confirmAction();
+      }
+    }
+    setShowConfirmModal(false);
+  };
+
+  const handleCancel = () => {
+    setShowConfirmModal(false);
   };
 
   return (
@@ -240,20 +335,6 @@ const BusOwnerProfile = ({ owner, onClose, fetchOwnerData }) => {
             <FaTimes className="text-gray-600 text-xl" />
           </button>
         </div>
-
-        {/* Error message */}
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
-            {error}
-          </div>
-        )}
-
-        {/* Success message */}
-        {success && (
-          <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
-            {success}
-          </div>
-        )}
 
         {/* Loading overlay */}
         {loading && !showUploadModal && !showImageUploadModal && (
@@ -281,13 +362,26 @@ const BusOwnerProfile = ({ owner, onClose, fetchOwnerData }) => {
                       <FaUser className="text-indigo-400 text-5xl" />
                     )}
                   </div>
-                  <button
-                    onClick={() => setShowImageUploadModal(true)}
-                    className="absolute bottom-2 right-2 bg-indigo-600 text-white p-2 rounded-full hover:bg-indigo-700 transition-colors"
-                    title="Change profile picture"
-                  >
-                    <FaCamera className="text-sm" />
-                  </button>
+                  <div className="absolute bottom-2 right-2">
+                    {owner.profilePic?.url ? (
+                      <button
+                        onClick={showDeleteProfilePictureConfirmation}
+                        className="bg-red-600 text-white p-2 rounded-full hover:bg-red-700 transition-colors"
+                        title="Delete profile picture"
+                        disabled={loading}
+                      >
+                        <FaTrash className="text-sm" />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setShowImageUploadModal(true)}
+                        className="bg-indigo-600 text-white p-2 rounded-full hover:bg-indigo-700 transition-colors"
+                        title="Upload profile picture"
+                      >
+                        <FaCamera className="text-sm" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {isEditing ? (
@@ -458,7 +552,9 @@ const BusOwnerProfile = ({ owner, onClose, fetchOwnerData }) => {
                               <FaEye />
                             </button>
                             <button
-                              onClick={() => handleDeleteDocument(doc._id)}
+                              onClick={() =>
+                                showDeleteDocumentConfirmation(doc._id)
+                              }
                               className="text-red-400 hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100"
                               disabled={loading}
                               title="Delete Document"
@@ -572,7 +668,7 @@ const BusOwnerProfile = ({ owner, onClose, fetchOwnerData }) => {
                           className="min-w-[250px] max-w-[250px] bg-gradient-to-br from-yellow-50 to-amber-50 border-l-4 border-amber-400 p-4 rounded-r-lg rounded-bl-lg shadow-sm hover:shadow-md transition-shadow relative group"
                         >
                           <button
-                            onClick={() => handleDeleteNote(note._id)}
+                            onClick={() => showDeleteNoteConfirmation(note._id)}
                             className="absolute top-2 right-2 text-red-400 hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100"
                             disabled={loading}
                           >
@@ -609,36 +705,106 @@ const BusOwnerProfile = ({ owner, onClose, fetchOwnerData }) => {
               )}
             </div>
 
-            {/* Buses Section */}
+            {/* Buses Section with Horizontal Scroll */}
             <div className="bg-white rounded-2xl shadow-lg p-6">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                <FaCar className="mr-2 text-indigo-600" />
-                Buses ({owner.buses?.length || 0})
-              </h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-gray-800 flex items-center">
+                  <FaCar className="mr-2 text-indigo-600" />
+                  Buses ({owner.buses?.length || 0})
+                </h3>
+
+                {owner.buses?.length > 0 && (
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => scrollBuses("left")}
+                      className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"
+                    >
+                      <FaArrowLeft className="text-gray-600" />
+                    </button>
+                    <button
+                      onClick={() => scrollBuses("right")}
+                      className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"
+                    >
+                      <FaArrowRight className="text-gray-600" />
+                    </button>
+                  </div>
+                )}
+              </div>
 
               {owner.buses?.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {owner.buses.map((bus, index) => (
-                    <div
-                      key={index}
-                      className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50"
-                    >
-                      <div className="flex items-center mb-2">
-                        <FaCar className="text-indigo-500 mr-2" />
-                        <span className="font-medium">
-                          {bus.registrationNumber || `Bus ${index + 1}`}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-500">
-                        Capacity: {bus.capacity || "N/A"} seats
-                      </p>
+                <div className="relative">
+                  <div
+                    id="buses-container"
+                    className="flex overflow-x-auto pb-4 scrollbar-hide scroll-smooth"
+                    style={{ scrollBehavior: "smooth" }}
+                  >
+                    <div className="flex space-x-4">
+                      {owner.buses.map((bus, index) => (
+                        <div
+                          key={index}
+                          className="min-w-[250px] max-w-[250px] border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-all duration-200 hover:shadow-md"
+                        >
+                          <div className="flex items-center mb-3">
+                            <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center mr-3">
+                              <FaCar className="text-indigo-500" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <span className="font-medium truncate block">
+                                {bus.registrationNumber || `Bus ${index + 1}`}
+                              </span>
+                              <p className="text-xs text-gray-500">
+                                {bus.make || "Unknown make"} {bus.model || ""}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                            <div>
+                              <p className="text-gray-500">Capacity</p>
+                              <p className="font-medium">
+                                {bus.capacity || "N/A"} seats
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-gray-500">Year</p>
+                              <p className="font-medium">{bus.year || "N/A"}</p>
+                            </div>
+                          </div>
+
+                          <div className="mb-3">
+                            <p className="text-gray-500 text-sm">Color</p>
+                            <div className="flex items-center">
+                              {bus.color && (
+                                <div
+                                  className="w-4 h-4 rounded-full mr-2 border border-gray-300"
+                                  style={{ backgroundColor: bus.color }}
+                                ></div>
+                              )}
+                              <span className="font-medium text-sm">
+                                {bus.color || "N/A"}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div
+                            className={`px-2 py-1 rounded-full text-xs font-medium inline-block ${
+                              bus.isActive
+                                ? "bg-green-100 text-green-800"
+                                : "bg-red-100 text-red-800"
+                            }`}
+                          >
+                            {bus.isActive ? "Active" : "Inactive"}
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  </div>
                 </div>
               ) : (
-                <p className="text-gray-500 text-center py-4">
-                  No buses assigned yet.
-                </p>
+                <div className="text-center py-8 border-2 border-dashed border-gray-300 rounded-lg">
+                  <FaCar className="text-gray-400 text-4xl mx-auto mb-3" />
+                  <p className="text-gray-500">No buses assigned yet.</p>
+                </div>
               )}
             </div>
           </div>
@@ -672,6 +838,26 @@ const BusOwnerProfile = ({ owner, onClose, fetchOwnerData }) => {
         onClose={() => setShowPdfPreview(false)}
         document={previewDocument}
       />
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showConfirmModal}
+        onClose={handleCancel}
+        onConfirm={handleConfirm}
+        message={confirmMessage}
+        confirmText="Yes, Delete"
+        cancelText="Cancel"
+        loading={loading}
+      />
+
+      {/* Snackbar Component */}
+      {snackbar.open && (
+        <Snackbar
+          message={snackbar.message}
+          type={snackbar.type}
+          onClose={closeSnackbar}
+        />
+      )}
 
       {/* Custom CSS for scrollbar hiding */}
       <style jsx>{`

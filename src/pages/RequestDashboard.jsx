@@ -2,6 +2,7 @@ import { useState, useEffect, useContext } from "react";
 import { AuthContext } from "../context/AuthContext";
 import api from "../services/api";
 import { io } from "socket.io-client";
+import Snackbar from "../components/shared/Snackbar";
 
 // Import tab components
 import PendingRequestsTab from "../components/admin/PendingRequestsTab";
@@ -10,14 +11,21 @@ import RequestSettingsTab from "../components/admin/RequestSettingsTab";
 import ManagersTab from "../components/admin/ManagersTab";
 import CheckPostsTab from "../components/admin/CheckPostsTab";
 import BusOwnersTab from "../components/admin/BusOwnersTab";
+import DeleteConfirmationModal from "../components/shared/DeleteConfirmationModal";
+import BusManagementTab from "../components/admin/BusManagementTab";
+import { FaBus } from "react-icons/fa";
 
 const RequestDashboard = () => {
   const { user, token } = useContext(AuthContext);
   const [activeTab, setActiveTab] = useState("pending");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [snackbar, setSnackbar] = useState({
+    show: false,
+    message: "",
+    type: "success",
+  });
 
   // Request states
   const [pendingRequests, setPendingRequests] = useState([]);
@@ -49,6 +57,12 @@ const RequestDashboard = () => {
 
   // Socket connection
   const [socket, setSocket] = useState(null);
+
+  // Delete modal states
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState(null);
+  const [deleteType, setDeleteType] = useState("");
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
     if (user && token) {
@@ -96,6 +110,22 @@ const RequestDashboard = () => {
       });
     }
   }, [socket]);
+
+  const showSnackbar = (message, type = "success") => {
+    setSnackbar({
+      show: true,
+      message,
+      type,
+    });
+  };
+
+  const hideSnackbar = () => {
+    setSnackbar({
+      show: false,
+      message: "",
+      type: "success",
+    });
+  };
 
   const fetchPendingRequests = async () => {
     try {
@@ -177,8 +207,7 @@ const RequestDashboard = () => {
     try {
       setError("");
       await api.put(`/request/${requestId}/approve`);
-      setSuccess("Request approved successfully");
-      setTimeout(() => setSuccess(""), 3000);
+      showSnackbar("Request approved successfully");
 
       // Fetch updated data
       fetchPendingRequests();
@@ -193,8 +222,7 @@ const RequestDashboard = () => {
     try {
       setError("");
       await api.put(`/request/${requestId}/reject`);
-      setSuccess("Request rejected successfully");
-      setTimeout(() => setSuccess(""), 3000);
+      showSnackbar("Request rejected successfully");
 
       // Fetch updated data
       fetchPendingRequests();
@@ -208,8 +236,7 @@ const RequestDashboard = () => {
     try {
       setError("");
       await api.put(`/request/settings/${requestType}`, { isAutoApproved });
-      setSuccess("Request type updated successfully");
-      setTimeout(() => setSuccess(""), 3000);
+      showSnackbar("Request type updated successfully");
       fetchRequestTypes();
     } catch (err) {
       setError(err.response?.data?.message || "Update failed");
@@ -237,12 +264,11 @@ const RequestDashboard = () => {
         });
       }
 
-      setSuccess(
+      showSnackbar(
         `${
           type === "managers" ? "Manager" : "CheckPost Man"
         } created successfully`
       );
-      setTimeout(() => setSuccess(""), 3000);
 
       fetchAdminData(); // Refresh data
       // Reset form
@@ -262,8 +288,7 @@ const RequestDashboard = () => {
         phoneNumber: busOwnerPhone,
       });
 
-      setSuccess("Bus owner created successfully");
-      setTimeout(() => setSuccess(""), 3000);
+      showSnackbar("Bus owner created successfully");
 
       // Refresh data and reset form
       fetchBusOwners();
@@ -274,29 +299,107 @@ const RequestDashboard = () => {
     }
   };
 
-  const handleDeleteUser = async (id, type) => {
-    try {
-      if (window.confirm("Are you sure you want to delete this user?")) {
-        await api.delete(`/${type}/${id}`);
-        setSuccess("User deleted successfully");
-        setTimeout(() => setSuccess(""), 3000);
-        fetchAdminData(); // Refresh data
-      }
-    } catch (err) {
-      setError(err.response?.data?.message || "Deletion failed");
+  const openDeleteModal = (id, type, name) => {
+    setItemToDelete({ id, name });
+    setDeleteType(type);
+    setDeleteModalOpen(true);
+  };
+
+  const closeDeleteModal = () => {
+    if (!deleteLoading) {
+      setDeleteModalOpen(false);
+      setItemToDelete(null);
+      setDeleteType("");
     }
   };
 
-  const handleDeleteBusOwner = async (id) => {
+  const handleDelete = async () => {
     try {
-      if (window.confirm("Are you sure you want to delete this bus owner?")) {
-        await api.delete(`/busowners/${id}`);
-        setSuccess("Bus owner deleted successfully");
-        setTimeout(() => setSuccess(""), 3000);
-        fetchBusOwners(); // Refresh data
+      setDeleteLoading(true);
+
+      if (deleteType === "manager") {
+        await api.delete(`/manager/${itemToDelete.id}`);
+        showSnackbar("Manager deleted successfully");
+        fetchAdminData();
+      } else if (deleteType === "checkpost") {
+        await api.delete(`/checkpost/${itemToDelete.id}`);
+        showSnackbar("CheckPost user deleted successfully");
+        fetchAdminData();
+      } else if (deleteType === "busowner") {
+        await api.delete(`/busowners/${itemToDelete.id}`);
+        showSnackbar("Bus owner deleted successfully");
+        fetchBusOwners();
       }
     } catch (err) {
       setError(err.response?.data?.message || "Deletion failed");
+    } finally {
+      setDeleteLoading(false);
+      closeDeleteModal();
+    }
+  };
+
+  const [busManagementLoading, setBusManagementLoading] = useState(false);
+  const [busManagementBuses, setBusManagementBuses] = useState([]);
+
+  // Add these functions to RequestDashboard
+  const fetchBusManagementBuses = async () => {
+    try {
+      setBusManagementLoading(true);
+      const response = await api.get("/busowners");
+      setBusManagementBuses(response.data.buses || []);
+    } catch (err) {
+      showSnackbar(
+        err.response?.data?.message || "Failed to fetch buses",
+        "error"
+      );
+    } finally {
+      setBusManagementLoading(false);
+    }
+  };
+
+  const handleAddBuses = async (data) => {
+    try {
+      setBusManagementLoading(true);
+      const response = await api.post("/busowners/add/buses", data);
+      showSnackbar(response.data.message || "Buses added successfully");
+      fetchBusManagementBuses();
+      fetchBusOwners();
+    } catch (err) {
+      throw new Error(
+        err.response?.data?.message || err.message || "Failed to add buses"
+      );
+    } finally {
+      setBusManagementLoading(false);
+    }
+  };
+
+  const handleUpdateBuses = async (data) => {
+    try {
+      setBusManagementLoading(true);
+      const response = await api.patch("/busowners/update/buses", data);
+      showSnackbar(response.data.message || "Buses updated successfully");
+      fetchBusManagementBuses();
+      fetchBusOwners();
+    } catch (err) {
+      throw new Error(
+        err.response?.data?.message || err.message || "Failed to update buses"
+      );
+    } finally {
+      setBusManagementLoading(false);
+    }
+  };
+
+  const handleDeleteBus = async (busId) => {
+    try {
+      setBusManagementLoading(true);
+      await api.delete(`/busowners/delete/buses/${busId}`);
+      showSnackbar("Bus deleted successfully");
+      fetchBusManagementBuses();
+      fetchBusOwners();
+    } catch (err) {
+      throw new Error(err.response?.data?.message || "Failed to delete bus");
+    } finally {
+      setBusManagementLoading(false);
     }
   };
 
@@ -387,7 +490,6 @@ const RequestDashboard = () => {
             </div>
             <span className="font-medium">Pending Requests</span>
           </button>
-
           <button
             className={`w-full text-left py-4 px-4 rounded-xl transition-all duration-300 flex items-center group ${
               activeTab === "history"
@@ -418,7 +520,6 @@ const RequestDashboard = () => {
             </div>
             <span className="font-medium">Request History</span>
           </button>
-
           <button
             className={`w-full text-left py-4 px-4 rounded-xl transition-all duration-300 flex items-center group ${
               activeTab === "settings"
@@ -449,7 +550,6 @@ const RequestDashboard = () => {
             </div>
             <span className="font-medium">Request Settings</span>
           </button>
-
           <button
             className={`w-full text-left py-4 px-4 rounded-xl transition-all duration-300 flex items-center group ${
               activeTab === "managers"
@@ -480,7 +580,6 @@ const RequestDashboard = () => {
             </div>
             <span className="font-medium">Managers</span>
           </button>
-
           <button
             className={`w-full text-left py-4 px-4 rounded-xl transition-all duration-300 flex items-center group ${
               activeTab === "checkposts"
@@ -511,7 +610,6 @@ const RequestDashboard = () => {
             </div>
             <span className="font-medium">CheckPosts</span>
           </button>
-
           <button
             className={`w-full text-left py-4 px-4 rounded-xl transition-all duration-300 flex items-center group ${
               activeTab === "busowners"
@@ -541,6 +639,26 @@ const RequestDashboard = () => {
               </svg>
             </div>
             <span className="font-medium">Bus Owners</span>
+          </button>
+          // Add to your tab buttons
+          <button
+            className={`w-full text-left py-4 px-4 rounded-xl transition-all duration-300 flex items-center group ${
+              activeTab === "busmanagement"
+                ? "bg-indigo-100 text-indigo-700 shadow-sm"
+                : "text-gray-600 hover:bg-indigo-50 hover:text-indigo-600"
+            }`}
+            onClick={() => handleTabChange("busmanagement")}
+          >
+            <div
+              className={`p-2 rounded-lg mr-3 transition-colors duration-300 ${
+                activeTab === "busmanagement"
+                  ? "bg-indigo-200 text-indigo-700"
+                  : "bg-gray-100 text-gray-500 group-hover:bg-indigo-100 group-hover:text-indigo-600"
+              }`}
+            >
+              <FaBus className="h-5 w-5" />
+            </div>
+            <span className="font-medium">Bus Management</span>
           </button>
         </nav>
 
@@ -615,28 +733,13 @@ const RequestDashboard = () => {
           </div>
         )}
 
-        {success && (
-          <div className="mb-6 bg-green-50 border-l-4 border-green-500 p-4 rounded-r-lg animate-fade-in">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <svg
-                  className="h-5 w-5 text-green-500"
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-green-700">{success}</p>
-              </div>
-            </div>
-          </div>
+        {/* Snackbar for success messages */}
+        {snackbar.show && (
+          <Snackbar
+            message={snackbar.message}
+            type={snackbar.type}
+            onClose={hideSnackbar}
+          />
         )}
 
         {/* Tabs Navigation - Hidden on mobile, shown on desktop */}
@@ -791,6 +894,19 @@ const RequestDashboard = () => {
                 Bus Owners
               </div>
             </button>
+            <button
+              className={`flex-1 py-4 px-6 text-center font-medium transition-all duration-300 ${
+                activeTab === "busmanagement"
+                  ? "text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50"
+                  : "text-gray-500 hover:text-indigo-500 hover:bg-gray-50"
+              }`}
+              onClick={() => handleTabChange("busmanagement")}
+            >
+              <div className="flex items-center gap-4 justify-center">
+                <FaBus className="h-5 w-5" />
+                <span className="font-medium">Bus Management</span>
+              </div>
+            </button>
           </div>
         </div>
 
@@ -811,7 +927,6 @@ const RequestDashboard = () => {
                 onRejectRequest={handleRejectRequest}
               />
             )}
-
             {activeTab === "history" && (
               <RequestHistoryTab
                 requestHistory={requestHistory}
@@ -821,14 +936,12 @@ const RequestDashboard = () => {
                 onPageChange={fetchRequestHistory}
               />
             )}
-
             {activeTab === "settings" && (
               <RequestSettingsTab
                 requestTypes={requestTypes}
                 onUpdateRequestType={handleUpdateRequestType}
               />
             )}
-
             {activeTab === "managers" && (
               <ManagersTab
                 managers={managers}
@@ -837,10 +950,11 @@ const RequestDashboard = () => {
                 onUsernameChange={setUsername}
                 onPasswordChange={setPassword}
                 onCreateUser={() => handleCreateUser("managers")}
-                onDeleteUser={(id) => handleDeleteUser(id, "manager")}
+                onDeleteUser={(id, name) =>
+                  openDeleteModal(id, "manager", name)
+                }
               />
             )}
-
             {activeTab === "checkposts" && (
               <CheckPostsTab
                 checkPostMen={checkPostMen}
@@ -851,10 +965,11 @@ const RequestDashboard = () => {
                 onPasswordChange={setPassword}
                 onLocationChange={setCheckPostLocation}
                 onCreateUser={() => handleCreateUser("checkposts")}
-                onDeleteUser={(id) => handleDeleteUser(id, "checkpost")}
+                onDeleteUser={(id, name) =>
+                  openDeleteModal(id, "checkpost", name)
+                }
               />
             )}
-
             {activeTab === "busowners" && (
               <BusOwnersTab
                 busOwners={busOwners}
@@ -863,13 +978,52 @@ const RequestDashboard = () => {
                 onNameChange={setBusOwnerName}
                 onPhoneNumberChange={setBusOwnerPhone}
                 onCreateBusOwner={handleCreateBusOwner}
-                onDeleteBusOwner={handleDeleteBusOwner}
+                onDeleteBusOwner={(id, name) =>
+                  openDeleteModal(id, "busowner", name)
+                }
                 loading={loading}
                 paginationInfo={busOwnersPagination}
               />
             )}
+
+            {activeTab === "busmanagement" && (
+              <BusManagementTab
+                busOwners={busOwners}
+                buses={busManagementBuses}
+                onFetchBuses={fetchBusManagementBuses}
+                onFetchBusOwners={fetchBusOwners}
+                onAddBuses={handleAddBuses}
+                onUpdateBuses={handleUpdateBuses}
+                onDeleteBus={handleDeleteBus}
+                loading={busManagementLoading}
+                showSnackbar={showSnackbar}
+              />
+            )}
           </div>
         )}
+
+        {/* Delete Confirmation Modal */}
+        <DeleteConfirmationModal
+          isOpen={deleteModalOpen}
+          onClose={closeDeleteModal}
+          onConfirm={handleDelete}
+          title={`Delete ${
+            deleteType === "manager"
+              ? "Manager"
+              : deleteType === "checkpost"
+              ? "CheckPost User"
+              : "Bus Owner"
+          }`}
+          itemName={itemToDelete?.name || ""}
+          itemType={
+            deleteType === "manager"
+              ? "manager"
+              : deleteType === "checkpost"
+              ? "checkpost user"
+              : "bus owner"
+          }
+          loading={deleteLoading}
+        />
       </div>
     </div>
   );
