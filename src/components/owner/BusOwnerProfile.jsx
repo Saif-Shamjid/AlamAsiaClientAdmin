@@ -51,6 +51,10 @@ const BusOwnerProfile = ({ owner, onClose, fetchOwnerData }) => {
     phoneNumber: "",
   });
 
+  // Add state for bus details
+  const [busDetails, setBusDetails] = useState([]);
+  const [loadingBuses, setLoadingBuses] = useState(false);
+
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
@@ -70,6 +74,37 @@ const BusOwnerProfile = ({ owner, onClose, fetchOwnerData }) => {
         name: owner.name || "",
         phoneNumber: owner.phoneNumber || "",
       });
+    }
+  }, [owner]);
+
+  // Function to fetch bus details
+  const fetchBusDetails = async (busIds) => {
+    if (!busIds || busIds.length === 0) {
+      setBusDetails([]);
+      return;
+    }
+
+    try {
+      setLoadingBuses(true);
+      const response = await api.post("/busowners/buses/multiple", { busIds });
+      setBusDetails(response.data.buses || []);
+    } catch (err) {
+      showSnackbar(
+        err.response?.data?.message || "Failed to fetch bus details",
+        "error"
+      );
+      setBusDetails([]);
+    } finally {
+      setLoadingBuses(false);
+    }
+  };
+
+  // Fetch bus details when owner changes
+  useEffect(() => {
+    if (owner && owner.buses && owner.buses.length > 0) {
+      fetchBusDetails(owner.buses);
+    } else {
+      setBusDetails([]);
     }
   }, [owner]);
 
@@ -710,10 +745,10 @@ const BusOwnerProfile = ({ owner, onClose, fetchOwnerData }) => {
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold text-gray-800 flex items-center">
                   <FaCar className="mr-2 text-indigo-600" />
-                  Buses ({owner.buses?.length || 0})
+                  Buses ({busDetails.length || 0})
                 </h3>
 
-                {owner.buses?.length > 0 && (
+                {busDetails.length > 0 && (
                   <div className="flex space-x-2">
                     <button
                       onClick={() => scrollBuses("left")}
@@ -731,7 +766,11 @@ const BusOwnerProfile = ({ owner, onClose, fetchOwnerData }) => {
                 )}
               </div>
 
-              {owner.buses?.length > 0 ? (
+              {loadingBuses ? (
+                <div className="text-center py-8">
+                  <p>Loading bus details...</p>
+                </div>
+              ) : busDetails.length > 0 ? (
                 <div className="relative">
                   <div
                     id="buses-container"
@@ -739,61 +778,23 @@ const BusOwnerProfile = ({ owner, onClose, fetchOwnerData }) => {
                     style={{ scrollBehavior: "smooth" }}
                   >
                     <div className="flex space-x-4">
-                      {owner.buses.map((bus, index) => (
+                      {busDetails.map((bus, index) => (
                         <div
                           key={index}
                           className="min-w-[250px] max-w-[250px] border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-all duration-200 hover:shadow-md"
                         >
-                          <div className="flex items-center mb-3">
-                            <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center mr-3">
-                              <FaCar className="text-indigo-500" />
+                          <div className="flex flex-col items-center mb-3">
+                            <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center mb-3">
+                              <FaCar className="text-indigo-500 text-xl" />
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <span className="font-medium truncate block">
+                            <div className="text-center">
+                              <span className="font-medium text-lg block">
+                                {bus.busNumber || "No bus number"}
+                              </span>
+                              <p className="text-sm text-gray-500 mt-1">
                                 {bus.registrationNumber || `Bus ${index + 1}`}
-                              </span>
-                              <p className="text-xs text-gray-500">
-                                {bus.make || "Unknown make"} {bus.model || ""}
                               </p>
                             </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2 text-sm mb-3">
-                            <div>
-                              <p className="text-gray-500">Capacity</p>
-                              <p className="font-medium">
-                                {bus.capacity || "N/A"} seats
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-gray-500">Year</p>
-                              <p className="font-medium">{bus.year || "N/A"}</p>
-                            </div>
-                          </div>
-
-                          <div className="mb-3">
-                            <p className="text-gray-500 text-sm">Color</p>
-                            <div className="flex items-center">
-                              {bus.color && (
-                                <div
-                                  className="w-4 h-4 rounded-full mr-2 border border-gray-300"
-                                  style={{ backgroundColor: bus.color }}
-                                ></div>
-                              )}
-                              <span className="font-medium text-sm">
-                                {bus.color || "N/A"}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div
-                            className={`px-2 py-1 rounded-full text-xs font-medium inline-block ${
-                              bus.isActive
-                                ? "bg-green-100 text-green-800"
-                                : "bg-red-100 text-red-800"
-                            }`}
-                          >
-                            {bus.isActive ? "Active" : "Inactive"}
                           </div>
                         </div>
                       ))}

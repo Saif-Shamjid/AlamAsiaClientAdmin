@@ -43,6 +43,8 @@ const RequestDashboard = () => {
   const [checkPostLocation, setCheckPostLocation] = useState("");
   const [busOwnerName, setBusOwnerName] = useState("");
   const [busOwnerPhone, setBusOwnerPhone] = useState("");
+  const [busManagementLoading, setBusManagementLoading] = useState(false);
+  const [busManagementBuses, setBusManagementBuses] = useState([]);
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -78,6 +80,7 @@ const RequestDashboard = () => {
       fetchRequestTypes();
       fetchAdminData();
       fetchBusOwners();
+      fetchBusManagementBuses();
 
       // Clean up on unmount
       return () => newSocket.close();
@@ -200,6 +203,22 @@ const RequestDashboard = () => {
       setError(err.response?.data?.message || "Failed to fetch bus owners");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Add these functions to RequestDashboard
+  const fetchBusManagementBuses = async () => {
+    try {
+      setBusManagementLoading(true);
+      const response = await api.get("/busowners/buses");
+      setBusManagementBuses(response.data.buses);
+    } catch (err) {
+      showSnackbar(
+        err.response?.data?.message || "Failed to fetch buses",
+        "error"
+      );
+    } finally {
+      setBusManagementLoading(false);
     }
   };
 
@@ -335,25 +354,6 @@ const RequestDashboard = () => {
     } finally {
       setDeleteLoading(false);
       closeDeleteModal();
-    }
-  };
-
-  const [busManagementLoading, setBusManagementLoading] = useState(false);
-  const [busManagementBuses, setBusManagementBuses] = useState([]);
-
-  // Add these functions to RequestDashboard
-  const fetchBusManagementBuses = async () => {
-    try {
-      setBusManagementLoading(true);
-      const response = await api.get("/busowners");
-      setBusManagementBuses(response.data.buses || []);
-    } catch (err) {
-      showSnackbar(
-        err.response?.data?.message || "Failed to fetch buses",
-        "error"
-      );
-    } finally {
-      setBusManagementLoading(false);
     }
   };
 
@@ -640,7 +640,7 @@ const RequestDashboard = () => {
             </div>
             <span className="font-medium">Bus Owners</span>
           </button>
-          // Add to your tab buttons
+
           <button
             className={`w-full text-left py-4 px-4 rounded-xl transition-all duration-300 flex items-center group ${
               activeTab === "busmanagement"
