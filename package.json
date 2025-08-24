@@ -12,6 +12,7 @@
   "dependencies": {
     "@tailwindcss/vite": "^4.1.12",
     "axios": "^1.11.0",
+    "lodash": "^4.17.21",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^5.4.54",
     "react": "^19.1.1",
